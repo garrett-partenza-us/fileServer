@@ -6,6 +6,8 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/stat.h>
+#include <time.h>
 
 
 #define SERVER_PORT 9999
@@ -44,6 +46,136 @@ int put(char *args[], int client_sockfd){
 }
 
 
+int info(char *args[], int client_sockfd){
+
+    char *path = args[1];
+
+    printf("Operation: INFO\n");
+    printf("Filename: %s\n", path);
+
+    struct stat file_stat;
+
+    if (stat(path, &file_stat) < 0) {
+        perror("Failed getting file stats");
+        return -1;
+    }
+
+    char buffer[BUFFER_SIZE] = {0};
+
+    char permissions[BUFFER_SIZE];
+    char owner[BUFFER_SIZE];
+    char size[BUFFER_SIZE];
+    char access[BUFFER_SIZE];
+    char modification[BUFFER_SIZE];
+    char change[BUFFER_SIZE];
+
+    sprintf(permissions, "File permissions: %o\n", file_stat.st_mode & 0777);
+    sprintf(owner, "Owner: %d\n", file_stat.st_uid);
+    sprintf(size, "Size: %lld bytes\n", file_stat.st_size);
+    sprintf(access, "Last access time: %s", ctime(&file_stat.st_atime));
+    sprintf(modification, "Last modification time: %s", ctime(&file_stat.st_mtime));
+    sprintf(change, "Last status change time: %s", ctime(&file_stat.st_ctime));
+
+    strcat(buffer, permissions);
+    strcat(buffer, owner);
+    strcat(buffer, size);
+    strcat(buffer, access);
+    strcat(buffer, modification);
+    strcat(buffer, change);
+
+    if (send(client_sockfd, buffer, strlen(buffer), 0) < 0) {
+        perror("Error sending file");
+        return -1;
+    }
+
+    return 0;
+
+}
+
+int md(char *args[], int client_sockfd){
+
+    char *path = args[1];
+
+    printf("Operation: MD\n");
+    printf("Directory: %s\n", path);
+
+    int result = mkdir(path, 0777);
+
+    char buffer[BUFFER_SIZE] = {0};
+    if (result == 0) {
+        strcat(buffer, "Success\n");
+    } else {
+        strcat(buffer, "Failed\n");
+    }
+
+    if (send(client_sockfd, buffer, strlen(buffer), 0) < 0) {
+        perror("Error sending status");
+        return -1;
+    }
+
+    return 0;
+
+}
+
+
+int rm(char *args[], int client_sockfd){
+
+    char *path = args[1];
+
+    printf("Operation: RM\n");
+    printf("Filename: %s\n", path);
+
+    int result = remove(path);
+
+    char buffer[BUFFER_SIZE] = {0};
+    if (result == 0) {
+        strcat(buffer, "Success\n");
+    } else {
+        strcat(buffer, "Failed\n");
+    }
+
+    if (send(client_sockfd, buffer, strlen(buffer), 0) < 0) {
+        perror("Error sending status");
+        return -1;
+    }
+
+    return 0;
+
+}
+
+
+int get(char *args[], int client_sockfd){
+
+    char *path = args[1];
+
+    printf("Operation: GET\n");
+    printf("Filename: %s\n", path);
+
+    FILE *fp = fopen(path, "r");
+    if (fp == NULL){
+        perror("Failed reading remote file");
+        return -1;
+    }
+
+    int bytes_sent = 0;
+    int total_bytes_sent = 0;
+    char filebuffer[1024] = {0};
+
+    while ((bytes_sent = fread(filebuffer, 1, BUFFER_SIZE, fp)) > 0) {
+        total_bytes_sent += bytes_sent;
+        if (send(client_sockfd, filebuffer, bytes_sent, 0) < 0) {
+            perror("Error sending file");
+            return -1;
+        }
+        memset(filebuffer, 0, BUFFER_SIZE);
+    }
+
+    return 0;
+
+}
+
+
+
 int main(){
 
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -75,36 +207,54 @@ int main(){
     struct sockaddr_in client_addr;
     int client_sockfd;
     client_size = sizeof(client_addr);
-    client_sockfd = accept(sockfd, (struct sockaddr *)&client_addr, &client_size);
 
-    if (client_sockfd < 0)
-    {
-        printf("Can't accept\n");
-        return -1;
+    while(1) {
+
+        client_sockfd = accept(sockfd, (struct sockaddr *)&client_addr, &client_size);
+
+        if (client_sockfd < 0)
+        {
+            printf("Can't accept\n");
+            continue;
+        }
+
+        printf("Client connected at IP: %s and port: %i\n",
+            inet_ntoa(client_addr.sin_addr),
+            ntohs(client_addr.sin_port));
+
+        char buffer[1024];
+        int bytes_received = recv(client_sockfd, buffer, 1024, 0);
+        buffer[bytes_received] = '\0';
+        
+        char *arg;
+        char *rest = buffer;
+        char *args[MAX_ARGS];
+        int argn = 0;
+        while ((arg = strtok_r(rest, " ", &rest))) {
+            args[argn++] = arg;
+            printf("Recieved argument: %s\n", arg);
+        }
+
+        if (strcmp(args[0], "PUT") == 0) {
+            put(args, client_sockfd);
+        }
+        else if (strcmp(args[0], "GET") == 0) {
+            get(args, client_sockfd);
+        }
+        else if (strcmp(args[0], "INFO") == 0) {
+            info(args, client_sockfd);
+        }
+        else if (strcmp(args[0], "MD") == 0) {
+            md(args, client_sockfd);
+        }
+        else if (strcmp(args[0], "RM") == 0) {
+            rm(args, client_sockfd);
+        }
+        
+        close(client_sockfd);
+
     }
 
-    printf("Client connected at IP: %s and port: %i\n",
-           inet_ntoa(client_addr.sin_addr),
-           ntohs(client_addr.sin_port));
-
-    char buffer[1024];
-    int bytes_received = recv(client_sockfd, buffer, 1024, 0);
-    buffer[bytes_received] = '\0';
-    
-    char *arg;
-    char *rest = buffer;
-    char *args[MAX_ARGS];
-    int argn = 0;
-    while ((arg = strtok_r(rest, " ", &rest))) {
-        args[argn++] = arg;
-        printf("Recieved argument: %s\n", arg);
-    }
-
-    if (strcmp(args[0], "PUT") == 0) {
-        return put(args, client_sockfd);
-    }
-    
-    close(client_sockfd);
     close(sockfd);
 
     return 0;
