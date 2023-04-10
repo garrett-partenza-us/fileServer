@@ -8,12 +8,21 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <time.h>
+#include "config.h"
+#include <pthread.h>
 
 
 #define SERVER_PORT 9999
 #define SERVER_IP "127.0.0.1"
 #define BUFFER_SIZE 1024
 #define MAX_ARGS 3
+
+
+int port;
+char *host;
+char *usb1;
+char *usb2;
+pthread_mutex_t lock;
 
 
 int put(char *args[], int client_sockfd){
@@ -23,22 +32,52 @@ int put(char *args[], int client_sockfd){
     printf("Operation: PUT\n");
     printf("Filename: %s\n", path);
 
-    int fd = open(path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
-    if (fd < 0) {
-        perror("File creation failed");
+    char path1[strlen(usb1) + strlen(path) + 1];
+    char path2[strlen(usb2) + strlen(path) + 1];
+
+    strcpy(path1, usb1);
+    strcat(path1, path);
+    strcpy(path2, usb2);
+    strcat(path2, path);
+
+    int fd1 = open(path1, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+    if (fd1 < 0) {
+        printf("File creation failed for usb1");
+    }
+
+    int fd2 = open(path2, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+    if (fd2 < 0) {
+        printf("File creation failed for usb2");
+    }
+
+    if ( (fd1 < 0) && (fd2 < 0) ) {
+        char buffer[BUFFER_SIZE] = {0};
+        strcat(buffer, "File server currently unavailable\n");
+        if (send(client_sockfd, buffer, strlen(buffer), 0) < 0) {
+            perror("Error sending server status message");
+        }
         return -1;
     }
 
-    int bytes_written, bytes_recieved;
+    int bytes_written1, bytes_written2, bytes_recieved;
     char filebuffer[1024] = {0};
     while((bytes_recieved = recv(client_sockfd, filebuffer, BUFFER_SIZE, 0)) > 0) {
-        bytes_written = write(fd, filebuffer, bytes_recieved);
-        if (bytes_written < 0) {
-            perror("Failed writting to file");
+        if (fd1) {
+            bytes_written1 = write(fd1, filebuffer, bytes_recieved);
+            if (bytes_written1 < 0) {
+                perror("Failed writting to usb1");
+            }
+        }
+        if (fd2) {
+            bytes_written2 = write(fd2, filebuffer, bytes_recieved);
+            if (bytes_written2 < 0) {
+                perror("Failed writting to usb2");
+            }
         }
     }
 
-    close(fd);
+    close(fd1);
+    close(fd2);
     close(client_sockfd);
 
     return 0;
@@ -49,18 +88,36 @@ int put(char *args[], int client_sockfd){
 int info(char *args[], int client_sockfd){
 
     char *path = args[1];
+    char buffer[BUFFER_SIZE] = {0};
 
     printf("Operation: INFO\n");
     printf("Filename: %s\n", path);
 
+    char path1[strlen(usb1) + strlen(path) + 1];
+    char path2[strlen(usb2) + strlen(path) + 1];
+
+    strcpy(path1, usb1);
+    strcat(path1, path);
+    strcpy(path2, usb2);
+    strcat(path2, path);
+
     struct stat file_stat;
 
-    if (stat(path, &file_stat) < 0) {
-        perror("Failed getting file stats");
+    if (stat(path1, &file_stat) < 0) {
+        perror("Failed getting file stats from usb1\n");
         return -1;
     }
-
-    char buffer[BUFFER_SIZE] = {0};
+    else if (stat(path2, &file_stat) < 0) {
+        perror("Failed getting file stats from usb2\n");
+        return -1;
+    }
+    else {
+        strcat(buffer, "File server currently unavailable\n");
+        if (send(client_sockfd, buffer, strlen(buffer), 0) < 0) {
+            perror("Error sending server status message");
+        }
+        return -1;
+    }
 
     char permissions[BUFFER_SIZE];
     char owner[BUFFER_SIZE];
@@ -99,10 +156,20 @@ int md(char *args[], int client_sockfd){
     printf("Operation: MD\n");
     printf("Directory: %s\n", path);
 
-    int result = mkdir(path, 0777);
+    char path1[strlen(usb1) + strlen(path) + 1];
+    char path2[strlen(usb2) + strlen(path) + 1];
+
+    strcpy(path1, usb1);
+    strcat(path1, path);
+    strcpy(path2, usb2);
+    strcat(path2, path);
+
+    int result1 = mkdir(path1, 0777);
+    int result2 = mkdir(path2, 0777);
 
     char buffer[BUFFER_SIZE] = {0};
-    if (result == 0) {
+
+    if ( (result1 == 0) || (result2 == 0) ) {
         strcat(buffer, "Success\n");
     } else {
         strcat(buffer, "Failed\n");
@@ -125,10 +192,20 @@ int rm(char *args[], int client_sockfd){
     printf("Operation: RM\n");
     printf("Filename: %s\n", path);
 
-    int result = remove(path);
+    char path1[strlen(usb1) + strlen(path) + 1];
+    char path2[strlen(usb2) + strlen(path) + 1];
+
+    strcpy(path1, usb1);
+    strcat(path1, path);
+    strcpy(path2, usb2);
+    strcat(path2, path);
+
+    int result1 = remove(path1);
+    int result2 = remove(path2);
 
     char buffer[BUFFER_SIZE] = {0};
-    if (result == 0) {
+
+    if ( (result1 == 0) || (result2 == 0) ) {
         strcat(buffer, "Success\n");
     } else {
         strcat(buffer, "Failed\n");
@@ -151,10 +228,25 @@ int get(char *args[], int client_sockfd){
     printf("Operation: GET\n");
     printf("Filename: %s\n", path);
 
-    FILE *fp = fopen(path, "r");
+    char path1[strlen(usb1) + strlen(path) + 1];
+    char path2[strlen(usb2) + strlen(path) + 1];
+
+    strcpy(path1, usb1);
+    strcat(path1, path);
+    strcpy(path2, usb2);
+    strcat(path2, path);
+
+    FILE *fp = fopen(path1, "r");
     if (fp == NULL){
-        perror("Failed reading remote file");
-        return -1;
+        fp = fopen(path2, "r");
+        if (fp == NULL){
+            char buffer[BUFFER_SIZE] = {0};
+            strcat(buffer, "File does not exist\n");
+            if (send(client_sockfd, buffer, strlen(buffer), 0) < 0) {
+                perror("Error sending server status message");
+            }
+            return -1;
+        }
     }
 
     int bytes_sent = 0;
@@ -177,6 +269,20 @@ int get(char *args[], int client_sockfd){
 
 
 int main(){
+
+    Config config;
+    parse_config("config.ini", &config);
+
+    // use config values
+    printf("port=%d\n", config.port);
+    printf("hostname=%s\n", config.host);
+    printf("usb1=%s\n", config.usb1);
+    printf("usb2=%s\n", config.usb2);
+
+    port = config.port;
+    host = config.host;
+    usb1 = config.usb1;
+    usb2 = config.usb2;
 
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0)
@@ -208,6 +314,8 @@ int main(){
     int client_sockfd;
     client_size = sizeof(client_addr);
 
+    pthread_mutex_init(&lock, NULL);
+
     while(1) {
 
         client_sockfd = accept(sockfd, (struct sockaddr *)&client_addr, &client_size);
@@ -235,6 +343,8 @@ int main(){
             printf("Recieved argument: %s\n", arg);
         }
 
+        pthread_mutex_lock(&lock);
+
         if (strcmp(args[0], "PUT") == 0) {
             put(args, client_sockfd);
         }
@@ -250,12 +360,16 @@ int main(){
         else if (strcmp(args[0], "RM") == 0) {
             rm(args, client_sockfd);
         }
+
+        pthread_mutex_unlock(&lock);
         
         close(client_sockfd);
 
     }
 
     close(sockfd);
+
+    pthread_mutex_destroy(&lock);
 
     return 0;
 }

@@ -6,10 +6,16 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include "config.h"
 
 #define SERVER_PORT 9999
 #define SERVER_IP "127.0.0.1"
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 102
+
+int port;
+char *host;
+char *usb1;
+char *usb2; 
 
 
 int help(){
@@ -23,7 +29,7 @@ int put(char *argv[]){
 
     printf("Operation: PUT\n");
     printf("Local Path: %s\n", localPath);
-    printf("Remote Path: %s\n", localPath);
+    printf("Remote Path: %s\n", remotePath);
 
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -251,6 +257,25 @@ int get(char *argv[]) {
 }
 
 int main(int argc, char *argv[]) {
+
+    Config config;
+    parse_config("config.ini", &config);
+
+    // use config values
+    printf("port=%d\n", config.port);
+    printf("hostname=%s\n", config.host);
+    printf("usb1=%s\n", config.usb1);
+    printf("usb2=%s\n", config.usb2);
+
+    port = config.port;
+    host = config.host;
+    usb1 = config.usb1;
+    usb2 = config.usb2;
+
+    if (argc == 1) {
+        help();
+        return -1;
+    }
 
     if (strcmp(argv[1], "PUT") == 0) {
         if (argc != 4){
