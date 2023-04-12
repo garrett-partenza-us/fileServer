@@ -30,6 +30,9 @@ void parse_config(const char *filename, Config *config) {
         } else if (strcmp(key, "usb2") == 0) {
             strncpy(config->usb2, value, sizeof(config->usb2));
             config->usb2[sizeof(config->usb2) - 1] = '\0'; // ensure null-terminated
+        } else if (strcmp(key, "logfile") == 0) {
+            strncpy(config->logfile, value, sizeof(config->logfile));
+            config->logfile[sizeof(config->logfile) - 1] = '\0'; // ensure null-terminated
         } else {
             // ignore unrecognized keys
         }
