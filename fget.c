@@ -42,13 +42,19 @@ int help(){
 /**
  * Function name: put
  * Description: Write a file to RAID storage
- * Parameters: A pointer to a character array of pointers which contain the clients arguments, integer socket file descriptor.
+ * Parameters: A pointer to a character array of pointers which contain the clients arguments, integer argument count.
  * Returns: 0 (success), 1 (failure)
  **/
-int put(char *argv[]){
+int put(char *argv[], int argc){
 
     char *localPath = argv[2];
-    char *remotePath = argv[3];
+    char *remotePath;
+    if (argc == 3) {
+        remotePath = argv[2];
+    }
+    else {
+        remotePath = argv[3];
+    }
 
     printf("Operation: PUT\n");
     printf("Local Path: %s\n", localPath);
@@ -69,7 +75,12 @@ int put(char *argv[]){
     }
 
     char arg_buffer[1024];
-    sprintf(arg_buffer, "%s %s %s", argv[1], argv[2], argv[3]);
+    if (argc == 3) {
+        sprintf(arg_buffer, "%s %s %s", argv[1], argv[2], argv[2]);
+    }
+    else {
+        sprintf(arg_buffer, "%s %s %s", argv[1], argv[2], argv[3]);
+    }
     send(sockfd, arg_buffer, strlen(arg_buffer), 0);
 
     FILE *file = fopen(localPath, "rb");
@@ -119,7 +130,7 @@ int put(char *argv[]){
 /**
  * Function name: info
  * Description: Return information about a file (perms, owner, size, and access)
- * Parameters: A pointer to a character array of pointers which contain the clients arguments, integer socket file descriptor.
+ * Parameters: A pointer to a character array of pointers which contain the clients arguments.
  * Returns: 0 (success), 1 (failure)
  **/
 int info(char *argv[]){
@@ -164,7 +175,7 @@ int info(char *argv[]){
 /**
  * Function name: md
  * Description: Create a directory in raid storage.
- * Parameters: A pointer to a character array of pointers which contain the clients arguments, integer socket file descriptor.
+ * Parameters: A pointer to a character array of pointers which contain the clients arguments.
  * Returns: 0 (success), 1 (failure)
  **/
 int md(char *argv[]){
@@ -209,7 +220,7 @@ int md(char *argv[]){
 /**
  * Function name: rm
  * Description: Remove a directory and all subcontents from RAID storage.
- * Parameters: A pointer to a character array of pointers which contain the clients arguments, integer socket file descriptor.
+ * Parameters: A pointer to a character array of pointers which contain the clients arguments.
  * Returns: 0 (success), 1 (failure)
  **/
 int rm(char *argv[]){
@@ -254,13 +265,19 @@ int rm(char *argv[]){
 /**
  * Function name: get
  * Description: Return a file in RAID storage to client.
- * Parameters: A pointer to a character array of pointers which contain the clients arguments, integer socket file descriptor.
+ * Parameters: A pointer to a character array of pointers which contain the clients arguments, integer argument count.
  * Returns: 0 (success), 1 (failure)
  **/
-int get(char *argv[]) {
+int get(char *argv[], int argc) {
 
     char *remotePath = argv[2];
-    char *localPath = argv[3];
+    char *localPath;
+    if (argc == 3) {
+        localPath = argv[2];
+    }
+    else {
+        localPath = argv[3];
+    }
 
     printf("Operation: GET\n");
     printf("Remote Path: %s\n", remotePath);
@@ -322,20 +339,20 @@ int main(int argc, char *argv[]) {
 
     // Switch operation function on client argument value
     if (strcmp(argv[1], "PUT") == 0) {
-        if (argc != 4){
+        if ( (argc != 3) && (argc != 4) ) {
             printf("Invalid arguments\n");
             help();
             return -1;
         }
-        return put(argv);
+        return put(argv, argc);
     }
     else if (strcmp(argv[1], "GET") == 0) {
-        if (argc != 4){
+        if ( (argc != 3) && (argc != 4) ) {
             printf("Invalid arguments\n");
             help();
             return -1;
         }
-        return get(argv);
+        return get(argv, argc);
     }
     else if (strcmp(argv[1], "INFO") == 0) {
         if (argc != 3){
