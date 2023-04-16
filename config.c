@@ -3,6 +3,12 @@
 #include <string.h>
 #include "config.h"
 
+/**
+ * Function name: parse_config
+ * Description: Parse config.ini into config struct.
+ * Parameters: Pointer to character array which is the file path to the configuration file, Config object to parse the configuration variables to.
+ * Returns: None
+ **/
 void parse_config(const char *filename, Config *config) {
     FILE *file = fopen(filename, "r");
     if (!file) {
