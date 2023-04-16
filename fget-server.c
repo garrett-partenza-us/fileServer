@@ -1,3 +1,4 @@
+// Includes
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -13,13 +14,12 @@
 #include <stdbool.h>
 
 
-#define SERVER_PORT 9999
-#define SERVER_IP "127.0.0.1"
-#define BUFFER_SIZE 1024
-#define MAX_ARGS 3
+#define BUFFER_SIZE 1024 // Consistent buffer size
+#define MAX_ARGS 3 // Maximum arguments passed via CLI
 
 
-int port;
+// Global variable initializations
+int port; 
 char *host;
 char *usb1;
 char *usb2;
@@ -27,6 +27,12 @@ char *logfile;
 pthread_mutex_t lock;
 
 
+/**
+ * Function name: initlog
+ * Description: Create a logfile (or overwrite to empty upon server start)
+ * Parameters: None
+ * Returns: 0 (success), 1 (failure)
+ **/
 int initlog() {
 
     FILE *fp = fopen(logfile, "w");
@@ -44,6 +50,12 @@ int initlog() {
 }
 
 
+/**
+ * Function name: writelog
+ * Description: Write a line in the heartbeat logfile
+ * Parameters: Pointer to a character array which will be written to the logfile.
+ * Returns: 0 (success), 1 (failure)
+ **/
 int writelog(char *line) {
 
     FILE *fp = fopen(logfile, "a");
@@ -61,6 +73,12 @@ int writelog(char *line) {
 }
 
 
+/**
+ * Function name: put
+ * Description: Write a file to RAID storage
+ * Parameters: A pointer to a character array of pointers which contain the clients arguments, integer socket file descriptor.
+ * Returns: 0 (success), 1 (failure)
+ **/
 int put(char *args[], int client_sockfd){
 
     char *path = args[2];
@@ -132,6 +150,12 @@ int put(char *args[], int client_sockfd){
 }
 
 
+/**
+ * Function name: info
+ * Description: Return information about a file (perms, owner, size, and access)
+ * Parameters: A pointer to a character array of pointers which contain the clients arguments, integer socket file descriptor.
+ * Returns: 0 (success), 1 (failure)
+ **/
 int info(char *args[], int client_sockfd){
 
     char *path = args[1];
@@ -158,34 +182,21 @@ int info(char *args[], int client_sockfd){
         perror("[ERROR]: Failed getting file stats from usb2\n");
         return -1;
     }
-    else {
-        strcat(buffer, "File server currently unavailable\n");
-        if (send(client_sockfd, buffer, strlen(buffer), 0) < 0) {
-            perror("[ERROR]: Error sending server status message");
-        }
-        return -1;
-    }
 
     char permissions[BUFFER_SIZE];
     char owner[BUFFER_SIZE];
     char size[BUFFER_SIZE];
     char access[BUFFER_SIZE];
-    char modification[BUFFER_SIZE];
-    char change[BUFFER_SIZE];
 
     sprintf(permissions, "File permissions: %o\n", file_stat.st_mode & 0777);
     sprintf(owner, "Owner: %d\n", file_stat.st_uid);
     sprintf(size, "Size: %lld bytes\n", file_stat.st_size);
-    sprintf(access, "Last access time: %s", ctime(&file_stat.st_atime));
-    sprintf(modification, "Last modification time: %s", ctime(&file_stat.st_mtime));
-    sprintf(change, "Last status change time: %s", ctime(&file_stat.st_ctime));
+    sprintf(access, "Last access time: %s\n", ctime(&file_stat.st_atime));
 
     strcat(buffer, permissions);
     strcat(buffer, owner);
     strcat(buffer, size);
     strcat(buffer, access);
-    strcat(buffer, modification);
-    strcat(buffer, change);
 
     if (send(client_sockfd, buffer, strlen(buffer), 0) < 0) {
         perror("[ERROR]: Error sending file");
@@ -196,6 +207,13 @@ int info(char *args[], int client_sockfd){
 
 }
 
+
+/**
+ * Function name: md
+ * Description: Create a directory in raid storage.
+ * Parameters: A pointer to a character array of pointers which contain the clients arguments, integer socket file descriptor.
+ * Returns: 0 (success), 1 (failure)
+ **/
 int md(char *args[], int client_sockfd){
 
     char *path = args[1];
@@ -239,6 +257,12 @@ int md(char *args[], int client_sockfd){
 }
 
 
+/**
+ * Function name: rm
+ * Description: Remove a directory and all subcontents from RAID storage.
+ * Parameters: A pointer to a character array of pointers which contain the clients arguments, integer socket file descriptor.
+ * Returns: 0 (success), 1 (failure)
+ **/
 int rm(char *args[], int client_sockfd){
 
     char *path = args[1];
@@ -282,6 +306,12 @@ int rm(char *args[], int client_sockfd){
 }
 
 
+/**
+ * Function name: get
+ * Description: Return a file in RAID storage to client.
+ * Parameters: A pointer to a character array of pointers which contain the clients arguments, integer socket file descriptor.
+ * Returns: 0 (success), 1 (failure)
+ **/
 int get(char *args[], int client_sockfd){
 
     char *path = args[1];
@@ -331,23 +361,27 @@ int get(char *args[], int client_sockfd){
 
 int main(){
 
+    // Parse config file
     Config config;
     parse_config("config.ini", &config);
 
-    // use config values
+    // Print config values
     printf("[INFO]: port=%d\n", config.port);
     printf("[INFO]: hostname=%s\n", config.host);
     printf("[INFO]: usb1=%s\n", config.usb1);
     printf("[INFO]: usb2=%s\n", config.usb2);
 
+    // Initialize global configuration variables
     port = config.port;
     host = config.host;
     usb1 = config.usb1;
     usb2 = config.usb2;
     logfile = config.logfile;
 
+    // Clear or create logfile for heartbeat monitor
     initlog();
 
+    // Create socket
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0)
     {
@@ -358,14 +392,16 @@ int main(){
     struct sockaddr_in server_address;
     server_address.sin_family = AF_INET;
     server_address.sin_addr.s_addr = INADDR_ANY;
-    server_address.sin_port = htons(SERVER_PORT);
+    server_address.sin_port = htons(port);
 
+    // Bind to socket
     if (bind(sockfd, (struct sockaddr *)&server_address, sizeof(server_address)) < 0)
     {
         perror("[ERROR]: Error binding to port");
         return -1;
     }
 
+    // Listen for incomming connections
     if(listen(sockfd, 1) < 0)
     {
         printf("[ERROR]: Error while listening\n");
@@ -378,10 +414,14 @@ int main(){
     int client_sockfd;
     client_size = sizeof(client_addr);
 
+    // Initialize mutex lock
     pthread_mutex_init(&lock, NULL);
 
+
+    // Infinite loop
     while(1) {
 
+        // Accept client
         client_sockfd = accept(sockfd, (struct sockaddr *)&client_addr, &client_size);
 
         if (client_sockfd < 0)
@@ -394,6 +434,7 @@ int main(){
             inet_ntoa(client_addr.sin_addr),
             ntohs(client_addr.sin_port));
 
+        // Recieve client arguments and parse into variables 
         char buffer[1024];
         int bytes_received = recv(client_sockfd, buffer, 1024, 0);
         buffer[bytes_received] = '\0';
@@ -407,8 +448,11 @@ int main(){
             printf("[INFO]: Recieved argument: %s\n", arg);
         }
 
+        // Thread safe at critical point
         pthread_mutex_lock(&lock);
 
+
+        // Switch operation function on client argument value
         if (strcmp(args[0], "PUT") == 0) {
             put(args, client_sockfd);
         }
@@ -425,8 +469,11 @@ int main(){
             rm(args, client_sockfd);
         }
 
+        // Release mutex lock
         pthread_mutex_unlock(&lock);
         
+
+        // Close client connection
         close(client_sockfd);
 
     }

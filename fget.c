@@ -1,3 +1,4 @@
+// Includes
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -8,20 +9,42 @@
 #include <fcntl.h>
 #include "config.h"
 
-#define SERVER_PORT 9999
-#define SERVER_IP "127.0.0.1"
-#define BUFFER_SIZE 102
 
+#define BUFFER_SIZE 1024 // Constant buffer size
+
+
+// Declare global variables
 int port;
 char *host;
 char *usb1;
 char *usb2; 
 
 
+/**
+ * Function name: help
+ * Description: Print help page to stdout
+ * Parameters: None
+ * Returns: 0 (success), 1 (failure)
+ **/
 int help(){
+    printf("--------\n");
+    printf("  HELP\n");
+    printf("--------\n");
+    printf("Possible functions...\n");
+    printf("[PUT] - fget PUT <local/file/path> <remote/file/path>\n");
+    printf("[GET] - fget GET <remote/file/path>\n");
+    printf("[MD] - fget MD <remote/folder/path>\n");
+    printf("[RM] - fget RM <remote/file/path>\n");
     return 0;
 }
 
+
+/**
+ * Function name: put
+ * Description: Write a file to RAID storage
+ * Parameters: A pointer to a character array of pointers which contain the clients arguments, integer socket file descriptor.
+ * Returns: 0 (success), 1 (failure)
+ **/
 int put(char *argv[]){
 
     char *localPath = argv[2];
@@ -35,8 +58,8 @@ int put(char *argv[]){
 
     struct sockaddr_in server_address;
     server_address.sin_family = AF_INET;
-    server_address.sin_addr.s_addr = inet_addr(SERVER_IP);
-    server_address.sin_port = htons(SERVER_PORT);
+    server_address.sin_addr.s_addr = inet_addr(host);
+    server_address.sin_port = htons(port);
 
     int connect_result = connect(sockfd, (struct sockaddr *)&server_address, sizeof(server_address));
 
@@ -93,6 +116,12 @@ int put(char *argv[]){
 }
 
 
+/**
+ * Function name: info
+ * Description: Return information about a file (perms, owner, size, and access)
+ * Parameters: A pointer to a character array of pointers which contain the clients arguments, integer socket file descriptor.
+ * Returns: 0 (success), 1 (failure)
+ **/
 int info(char *argv[]){
 
     char *remotePath = argv[2];
@@ -104,8 +133,8 @@ int info(char *argv[]){
 
     struct sockaddr_in server_address;
     server_address.sin_family = AF_INET;
-    server_address.sin_addr.s_addr = inet_addr(SERVER_IP);
-    server_address.sin_port = htons(SERVER_PORT);
+    server_address.sin_addr.s_addr = inet_addr(host);
+    server_address.sin_port = htons(port);
 
     int connect_result = connect(sockfd, (struct sockaddr *)&server_address, sizeof(server_address));
 
@@ -132,6 +161,12 @@ int info(char *argv[]){
 }
 
 
+/**
+ * Function name: md
+ * Description: Create a directory in raid storage.
+ * Parameters: A pointer to a character array of pointers which contain the clients arguments, integer socket file descriptor.
+ * Returns: 0 (success), 1 (failure)
+ **/
 int md(char *argv[]){
 
     char *remotePath = argv[2];
@@ -143,8 +178,8 @@ int md(char *argv[]){
 
     struct sockaddr_in server_address;
     server_address.sin_family = AF_INET;
-    server_address.sin_addr.s_addr = inet_addr(SERVER_IP);
-    server_address.sin_port = htons(SERVER_PORT);
+    server_address.sin_addr.s_addr = inet_addr(host);
+    server_address.sin_port = htons(port);
 
     int connect_result = connect(sockfd, (struct sockaddr *)&server_address, sizeof(server_address));
 
@@ -171,6 +206,12 @@ int md(char *argv[]){
 }
 
 
+/**
+ * Function name: rm
+ * Description: Remove a directory and all subcontents from RAID storage.
+ * Parameters: A pointer to a character array of pointers which contain the clients arguments, integer socket file descriptor.
+ * Returns: 0 (success), 1 (failure)
+ **/
 int rm(char *argv[]){
 
     char *remotePath = argv[2];
@@ -182,8 +223,8 @@ int rm(char *argv[]){
 
     struct sockaddr_in server_address;
     server_address.sin_family = AF_INET;
-    server_address.sin_addr.s_addr = inet_addr(SERVER_IP);
-    server_address.sin_port = htons(SERVER_PORT);
+    server_address.sin_addr.s_addr = inet_addr(host);
+    server_address.sin_port = htons(port);
 
     int connect_result = connect(sockfd, (struct sockaddr *)&server_address, sizeof(server_address));
 
@@ -210,6 +251,12 @@ int rm(char *argv[]){
 }
 
 
+/**
+ * Function name: get
+ * Description: Return a file in RAID storage to client.
+ * Parameters: A pointer to a character array of pointers which contain the clients arguments, integer socket file descriptor.
+ * Returns: 0 (success), 1 (failure)
+ **/
 int get(char *argv[]) {
 
     char *remotePath = argv[2];
@@ -223,8 +270,8 @@ int get(char *argv[]) {
 
     struct sockaddr_in server_address;
     server_address.sin_family = AF_INET;
-    server_address.sin_addr.s_addr = inet_addr(SERVER_IP);
-    server_address.sin_port = htons(SERVER_PORT);
+    server_address.sin_addr.s_addr = inet_addr(host);
+    server_address.sin_port = htons(port);
 
     int connect_result = connect(sockfd, (struct sockaddr *)&server_address, sizeof(server_address));
 
@@ -258,15 +305,11 @@ int get(char *argv[]) {
 
 int main(int argc, char *argv[]) {
 
+    // Parse config file
     Config config;
     parse_config("config.ini", &config);
 
-    // use config values
-    printf("port=%d\n", config.port);
-    printf("hostname=%s\n", config.host);
-    printf("usb1=%s\n", config.usb1);
-    printf("usb2=%s\n", config.usb2);
-
+    // Print config values
     port = config.port;
     host = config.host;
     usb1 = config.usb1;
@@ -277,6 +320,7 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    // Switch operation function on client argument value
     if (strcmp(argv[1], "PUT") == 0) {
         if (argc != 4){
             printf("Invalid arguments\n");

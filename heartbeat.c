@@ -1,3 +1,4 @@
+// Includes
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -6,12 +7,22 @@
 #include <stdbool.h>
 #include <string.h>
 
-#define BUFFERSIZE 256
 
+#define BUFFERSIZE 256 // Constant buffer size
+
+
+// Declare global variables
 char *logfile;
 char *usb1;
 char *usb2;
 
+
+/**
+ * Function name: copy
+ * Description: Copy a file from one USB to another USB
+ * Parameters: A pointer to a character array of the failed operation's path, integer of RAID storage device to copy to.
+ * Returns: 0 (success), 1 (failure)
+ **/
 int copy(char *path, int device){
 
     char from[BUFFERSIZE];
@@ -62,6 +73,12 @@ int copy(char *path, int device){
 }
 
 
+/**
+ * Function name: update
+ * Description: Syncronize USB devices on RAID storage following a failure. Iterate over log file and perform operations on out-of-sync USB.
+ * Parameters: A pointer of character array pointers describing the names of the USB devices, integer of device which failed.
+ * Returns: 0 (success), 1 (failure)
+ **/
 int update(char *dev_names[], int device) {
 
     FILE* file = fopen(logfile, "r");
@@ -125,6 +142,12 @@ int update(char *dev_names[], int device) {
     
     // close file
     fclose(file);
+
+    // clear the file
+    FILE *fp;
+    fp = fopen(logfile, "w");
+    fclose(fp);
+    printf("[INFO]: File contents cleared successfully!\n");
     
     return 0;
 
@@ -133,19 +156,27 @@ int update(char *dev_names[], int device) {
 
 int main() {
 
+    // Parse config file
     Config config;
     parse_config("config.ini", &config);
 
+    // Print configuration variables
     printf("[INFO]: usb1=%s\n", config.usb1);
     printf("[INFO]: usb2=%s\n", config.usb2);
     printf("[INFO]: logfile=%s\n", config.logfile);
 
+    // Initialize global variables
     logfile = config.logfile;
     usb1 = config.usb1;
     usb2 = config.usb2;
     bool fix = false;
     int device;
 
+    /**
+     Enter an infinite loop for checking USB status every second.
+     If USB goes offline, set 'fix' boolean flag to true, and wait for it to come back online.
+     Once the USB comes back online, iterate over the logfile and update the failed USB back into a syncronized state.
+     **/
     while (1) {
 
         struct stat sb;
